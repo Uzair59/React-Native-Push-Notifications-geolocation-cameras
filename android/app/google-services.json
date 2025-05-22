@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "805238835234",
+    "project_id": "push-notify-react-native",
+    "storage_bucket": "push-notify-react-native.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:805238835234:android:7d025175a27630527ae27b",
+        "android_client_info": {
+          "package_name": "com.uzair.travelmateapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrYn3CAUprpbJzpHqLkdcuO6hAsVodIGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

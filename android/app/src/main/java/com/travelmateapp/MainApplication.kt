@@ -1,4 +1,4 @@
-package com.travelmateapp
+package com.uzair.travelmateapp
 
 import android.app.Application
 import com.facebook.react.PackageList

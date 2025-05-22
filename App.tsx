@@ -1,131 +1,147 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, {createContext, useEffect, useState} from 'react';
+import {NavigationContainer} from '@react-navigation/native';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import StartupScreen from './src/views/auth/StartupScreen';
+import LoginScreen from './src/views/auth/LoginScreen';
+import HomeScreen from './src/views/home/HomeScreen';
+import GeoLocationScreen from './src/views/home/GeoLocationScreen';
+import CameraScreen from './src/views/home/CameraScreen';
+import messaging from '@react-native-firebase/messaging';
+import {Alert, PermissionsAndroid, Platform} from 'react-native';
+import NotificationScreen from './src/views/home/NotificationScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+const Stack = createNativeStackNavigator();
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+// Context to share notifications globally
+export const NotificationContext = createContext();
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+export default function App() {
+  const [notifications, setNotifications] = useState([]);
+  console.log("notifications list===", notifications)
+  const requestUserPermission = async () => {
+    const authStatus = await messaging().requestPermission();
+    const enabled =
+      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+    if (enabled) {
+      console.log('Notification permission status:', authStatus);
+      getFcmToken();
+    } else {
+      Alert.alert('Push Notification permission denied');
+    }
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+      await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    }
+  };
+  const getFcmToken = async () => {
+    try {
+      const fcmToken = await messaging().getToken();
+
+      if (fcmToken) {
+        console.log('Fcm Token', fcmToken);
+      } else {
+        console.log('Failed to get Fcm token');
+      }
+    } catch (error) {
+      console.error('Error fetching FCM token:', error);
+    }
   };
 
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the recommendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
+  // Load saved notifications on app start
+  const loadNotifications = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('notifications');
+      if (saved) {
+        setNotifications(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.log('Error loading notifications:', e);
+    }
+  };
 
+  // Save updated notifications to storage
+  const saveNotifications = async updated => {
+    try {
+      await AsyncStorage.setItem('notifications', JSON.stringify(updated));
+    } catch (e) {
+      console.log('Error saving notifications:', e);
+    }
+  };
+
+  useEffect(() => {
+    requestUserPermission();
+    loadNotifications();
+  
+    // Foreground notification
+    const unsubscribe = messaging().onMessage(async remoteMessage => {
+      const newNotification = {
+        title: remoteMessage.notification?.title,
+        body: remoteMessage.notification?.body,
+        time: new Date().toLocaleTimeString(),
+      };
+  
+      const updated = [newNotification, ...notifications];
+      setNotifications(updated);
+      saveNotifications(updated);
+    });
+  
+    // Background to foreground
+    messaging().onNotificationOpenedApp(remoteMessage => {
+      if (remoteMessage?.notification) {
+        const newNotification = {
+          title: remoteMessage.notification.title,
+          body: remoteMessage.notification.body,
+          time: new Date().toLocaleTimeString(),
+        };
+  
+        setNotifications(prev => {
+          const updated = [newNotification, ...prev];
+          saveNotifications(updated);
+          return updated;
+        });
+      }
+    });
+  
+    // App completely closed and opened by notification
+    messaging()
+      .getInitialNotification()
+      .then(remoteMessage => {
+        if (remoteMessage?.notification) {
+          const newNotification = {
+            title: remoteMessage.notification.title,
+            body: remoteMessage.notification.body,
+            time: new Date().toLocaleTimeString(),
+          };
+  
+          setNotifications(prev => {
+            const updated = [newNotification, ...prev];
+            saveNotifications(updated);
+            return updated;
+          });
+        }
+      });
+  
+    return unsubscribe;
+  }, []);
+  
   return (
-    <View style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
-        </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </View>
+    <NotificationContext.Provider value={{notifications, setNotifications}}>
+    <NavigationContainer>
+      <Stack.Navigator
+        initialRouteName="Startup"
+        screenOptions={{headerShown: false}}>
+        <Stack.Screen name="Startup" component={StartupScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="GeoLocationScreen" component={GeoLocationScreen} />
+        <Stack.Screen name="CameraScreen" component={CameraScreen} />
+        <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
+    </NotificationContext.Provider>
   );
 }
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
-
-export default App;
